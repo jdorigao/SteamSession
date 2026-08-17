@@ -1,0 +1,269 @@
+#!/bin/bash
+set -u
+
+# ============================================================
+# STEAM GAMING SESSION
+#
+# Script principal: carrega os módulos de cada compositor
+# (lib/common + compositors/*) e controla o menu.
+#
+# Estrutura esperada:
+#   steam-session
+#   ├── steam-session          <- este arquivo
+#   ├── lib/
+#   │   └── common
+#   └── compositors/
+#       ├── niri
+#       ├── kwin
+#       ├── steamos         (gamescope)
+#       └── mutter          (futuro)
+# ============================================================
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+source "$SCRIPT_DIR/lib/common"
+source "$SCRIPT_DIR/compositors/niri"
+source "$SCRIPT_DIR/compositors/kwin"
+source "$SCRIPT_DIR/compositors/steamos"
+source "$SCRIPT_DIR/compositors/mutter"
+source "$SCRIPT_DIR/compositors/openbox"
+
+
+# ============================================================
+# CONFIGURAÇÃO (compositor padrão / pular menu)
+# ============================================================
+#
+# Arquivo: ~/.config/steam-session/config
+#
+# Variáveis aceitas:
+#   DEFAULT_COMPOSITOR = niri | kwin | steamos | mutter | shell
+#   SKIP_MENU          = true | false
+#
+# Se SKIP_MENU="true", o menu nunca é exibido: o script sempre
+# inicia DEFAULT_COMPOSITOR diretamente, inclusive depois que a
+# sessão terminar (volta a iniciar automaticamente em loop).
+#
+# Veja config.example neste mesmo diretório.
+
+DEFAULT_COMPOSITOR="niri"
+SKIP_MENU="false"
+
+CONFIG_FILE="$HOME/.config/steam-session/config"
+
+if [[ -f "$CONFIG_FILE" ]]; then
+    source "$CONFIG_FILE"
+fi
+
+
+# ============================================================
+# NVIDIA SHADER CACHE
+# ============================================================
+
+export __GL_SHADER_DISK_CACHE=1
+export __GL_SHADER_DISK_CACHE_SIZE=12000000000
+
+# ============================================================
+# MANGOHUD
+# ============================================================
+
+export MANGOHUD=1
+
+# ============================================================
+# SHELL
+# ============================================================
+
+start_shell() {
+
+    clear
+
+    echo "=================================="
+    echo "             SHELL"
+    echo "=================================="
+    echo
+
+    exec bash
+}
+
+
+# ============================================================
+# REBOOT
+# ============================================================
+
+reboot_system() {
+
+    clear
+    echo "Reiniciando..."
+
+    sleep 1
+
+    systemctl reboot
+}
+
+
+# ============================================================
+# SHUTDOWN
+# ============================================================
+
+shutdown_system() {
+
+    clear
+    echo "Desligando..."
+
+    sleep 1
+
+    systemctl poweroff
+}
+
+
+# ============================================================
+# MENU
+# ============================================================
+
+show_menu() {
+
+    clear
+
+    echo "=================================="
+    echo "        STEAM GAMING SESSION"
+    echo "=================================="
+    echo
+    echo "  1) Niri"
+    echo "  2) Openbox (X11)"
+    echo "  3) KWin Wayland"
+    echo "  4) SteamOS (Gamescope)"
+    echo "  5) Mutter"
+    echo "  6) Shell"
+    echo "  7) Reboot"
+    echo "  8) Shutdown"
+    echo
+    echo "Padrão atual: $DEFAULT_COMPOSITOR  (SKIP_MENU=$SKIP_MENU)"
+    echo
+}
+
+
+# ============================================================
+# DESPACHO
+#
+# Aceita tanto o número do menu quanto o nome do compositor
+# (usado pelo DEFAULT_COMPOSITOR do arquivo de configuração).
+# Retorna 0 para "continuar o loop" e 9 para "opção inválida".
+# ============================================================
+
+dispatch_compositor() {
+
+    local choice="$1"
+
+    case "$choice" in
+
+        1|niri)
+            start_niri
+            ;;
+
+        2|openbox|x11)
+            start_openbox
+            ;;
+
+        3|kwin|kde)
+            start_kwin
+            ;;
+
+        4|steamos|gamescope)
+            start_steamos
+            ;;
+
+        5|mutter)
+            start_mutter
+            ;;
+
+        6|shell)
+            start_shell
+            ;;
+
+        7|reboot)
+            reboot_system
+            exit
+            ;;
+
+        8|shutdown)
+            shutdown_system
+            exit
+            ;;
+
+        *)
+            return 9
+            ;;
+
+    esac
+
+    return 0
+}
+
+
+# ============================================================
+# ARGUMENTO
+# ============================================================
+
+# Um argumento na linha de comando sempre tem prioridade e é
+# usado apenas uma vez (nome ou número). Depois disso, o
+# comportamento depende de SKIP_MENU:
+#
+#   SKIP_MENU=false -> volta a mostrar o menu normalmente.
+#   SKIP_MENU=true  -> volta a iniciar DEFAULT_COMPOSITOR direto.
+#
+# Passe "menu" como argumento para forçar a exibição do menu
+# mesmo com SKIP_MENU=true no arquivo de configuração.
+#
+# Exemplos:
+#   steam-session           -> usa DEFAULT_COMPOSITOR/SKIP_MENU do config
+#   steam-session niri      -> Niri (uma vez)
+#   steam-session kwin      -> KWin (uma vez)
+#   steam-session steamos   -> SteamOS/Gamescope (uma vez)
+#   steam-session menu      -> força exibir o menu
+
+ARG="${1:-}"
+FORCE_MENU="false"
+
+if [[ "$ARG" == "menu" ]]; then
+    FORCE_MENU="true"
+    ARG=""
+fi
+
+ONCE="$ARG"
+
+
+# ============================================================
+# LOOP PRINCIPAL
+# ============================================================
+
+while true; do
+
+    if [[ -n "$ONCE" ]]; then
+        # Argumento de linha de comando: usado uma única vez.
+        choice="$ONCE"
+        ONCE=""
+
+    elif [[ "$SKIP_MENU" == "true" && "$FORCE_MENU" == "false" ]]; then
+        # Sem menu: sempre reinicia o compositor padrão.
+        choice="$DEFAULT_COMPOSITOR"
+
+    else
+        show_menu
+        read -rp "Selecione [1-8]: " choice
+    fi
+
+
+    if ! dispatch_compositor "$choice"; then
+
+        clear
+
+        echo "=================================="
+        echo "        OPÇÃO INVÁLIDA"
+        echo "=================================="
+        echo
+        echo "Opção selecionada: $choice"
+        echo
+
+        sleep 2
+    fi
+
+done

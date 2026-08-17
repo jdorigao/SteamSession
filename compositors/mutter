@@ -1,0 +1,54 @@
+#!/bin/bash
+# ============================================================
+# compositors/mutter
+#
+# Mutter — sessão Wayland mínima para jogos
+# ============================================================
+
+MUTTER_BIN="mutter"
+
+MUTTER_ARGS=(
+    --wayland
+    --display-server
+)
+
+
+start_mutter() {
+
+    clear
+
+    echo "=================================="
+    echo "             MUTTER"
+    echo "=================================="
+    echo
+
+    if ! command -v "$MUTTER_BIN" >/dev/null 2>&1; then
+        echo "Erro: Mutter não encontrado."
+        echo
+        read -rp "Pressione ENTER para voltar ao menu..."
+        return 1
+    fi
+
+    export XDG_SESSION_TYPE=wayland
+    export XDG_CURRENT_DESKTOP=mutter
+    export XDG_SESSION_DESKTOP=mutter
+    export XDG_SESSION_CLASS=user
+    export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+
+    echo "Iniciando sessão Mutter + Steam..."
+    echo
+    echo "Mutter: $MUTTER_BIN ${MUTTER_ARGS[*]}"
+    echo "Steam:  steam -gamepadui"
+    echo
+
+    if [ -n "$DBUS_SESSION_BUS_ADDRESS" ]; then
+        exec "$MUTTER_BIN" \
+            "${MUTTER_ARGS[@]}" \
+            -- steam -gamepadui
+    else
+        exec dbus-run-session \
+            "$MUTTER_BIN" \
+            "${MUTTER_ARGS[@]}" \
+            -- steam -gamepadui
+    fi
+}

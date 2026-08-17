@@ -1,0 +1,60 @@
+#!/bin/bash
+
+case "$1" in
+    volume)
+        case "$2" in
+            +[0-9]*)
+                VALUE="${2#+}"
+                wpctl set-volume -l 1.0 @DEFAULT_AUDIO_SINK@ "${VALUE}%+"
+                ;;
+            -[0-9]*)
+                VALUE="${2#-}"
+                wpctl set-volume @DEFAULT_AUDIO_SINK@ "${VALUE}%-"
+                ;;
+            mute|toggle)
+                wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle
+                ;;
+            *)
+                echo "Uso: $0 volume {+N|-N|mute}"
+                exit 1
+                ;;
+        esac
+        ;;
+
+    mic)
+        case "$2" in
+            mute|toggle)
+                wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle
+                ;;
+            *)
+                echo "Uso: $0 mic {mute}"
+                exit 1
+                ;;
+        esac
+        ;;
+
+    brightness)
+        case "$2" in
+            +[0-9]*)
+                VALUE="${2#+}"
+                brightnessctl set "${VALUE}%+"
+                ;;
+            -[0-9]*)
+                VALUE="${2#-}"
+                brightnessctl set "${VALUE}%-"
+                ;;
+            *)
+                echo "Uso: $0 brightness {+N|-N}"
+                exit 1
+                ;;
+        esac
+        ;;
+
+    *)
+        echo "Uso:"
+        echo "  $0 volume {+N|-N|mute}"
+        echo "  $0 mic mute"
+        echo "  $0 brightness {+N|-N}"
+        exit 1
+        ;;
+esac
