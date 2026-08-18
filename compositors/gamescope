@@ -1,0 +1,34 @@
+#!/bin/bash
+# ============================================================
+# compositors/gamescope
+#
+# Gamescope initialization, running Steam (GamepadUI)
+# inside the session.
+# ============================================================
+
+GAMESCOPE_BIN="gamescope"
+GAMESCOPE_ARGS=(--backend drm -e)
+
+
+start_gamescope() {
+
+    local status
+
+    clear
+
+    "$GAMESCOPE_BIN" \
+        "${GAMESCOPE_ARGS[@]}" \
+        -- \
+        "$STEAM_BIN" "${STEAM_ARGS[@]}"
+
+    status=$?
+
+
+    # Normal termination.
+    if [[ "$status" -eq 0 ]]; then
+        return 0
+    fi
+
+    report_failure "GAMESCOPE FAILED" "$status"
+    return "$status"
+}

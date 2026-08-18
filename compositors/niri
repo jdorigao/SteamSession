@@ -1,160 +1,18 @@
 #!/bin/bash
 # ============================================================
-# compositors/niri.sh
-#
-# Inicialização do compositor Niri via systemd (niri.service).
+# compositors/niri
 # ============================================================
 
-NIRI_BIN="niri"
-NIRI_SERVICE="niri.service"
-NIRI_CONFIG="$HOME/.config/niri/config.kdl"
-
+COMPOSITOR_LABEL="Niri (Intel/AMD Integrated)"
 
 start_niri() {
+    clear
 
-    local log_file
-    log_file="$(new_log_file niri)"
+    # Important for Generic Wayland/Integrated GPU
+    export ELECTRON_OZONE_PLATFORM_HINT=auto
 
-    create_log_header "$log_file" "NIRI SESSION LOG"
-
-
-    # ========================================================
-    # Informações iniciais
-    # ========================================================
-
-    {
-        echo "========== NIRI =========="
-        "$NIRI_BIN" --version
-        echo
-
-        echo "========== CONFIG =========="
-        if [[ -f "$NIRI_CONFIG" ]]; then
-            cat "$NIRI_CONFIG"
-        else
-            echo "Configuração não encontrada."
-        fi
-
-        echo
-        echo "========== INICIALIZAÇÃO =========="
-        echo "Data: $(date)"
-        echo
-
-    } >> "$log_file" 2>&1
-
-
-    # ========================================================
-    # Inicia o serviço
-    # ========================================================
-
-    systemctl --user reset-failed "$NIRI_SERVICE" \
-        >> "$log_file" 2>&1
-
-    systemctl --user start "$NIRI_SERVICE" \
-        >> "$log_file" 2>&1
-
-
-    # ========================================================
-    # Verifica inicialização
-    # ========================================================
-
-    if ! systemctl --user is-active --quiet "$NIRI_SERVICE"; then
-
-        {
-            echo
-            echo "========================================"
-            echo " ERRO AO INICIAR NIRI"
-            echo "========================================"
-            echo
-
-            echo "========== SYSTEMD =========="
-
-            systemctl --user show "$NIRI_SERVICE" \
-                -p LoadState \
-                -p ActiveState \
-                -p SubState \
-                -p Result \
-                -p ExecMainCode \
-                -p ExecMainStatus \
-                --no-pager || true
-
-            echo
-            echo "========== STATUS =========="
-
-            systemctl --user status \
-                "$NIRI_SERVICE" \
-                --no-pager || true
-
-            echo
-            echo "========== JOURNAL =========="
-
-            journalctl --user \
-                -u "$NIRI_SERVICE" \
-                -n 100 \
-                --no-pager || true
-
-        } >> "$log_file" 2>&1
-
-        report_failure "ERRO AO INICIAR NIRI" "$log_file"
-
-        return 1
-    fi
-
-
-    # ========================================================
-    # Sessão Niri ativa
-    # ========================================================
-
-    {
-        echo
-        echo "========== NIRI ATIVO =========="
-        echo "Data: $(date)"
-        echo "WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-não definido}"
-        echo "XDG_SESSION_TYPE=${XDG_SESSION_TYPE:-não definido}"
-        echo
-
-    } >> "$log_file" 2>&1
-
-
-    # ========================================================
-    # Aguarda o compositor terminar
-    # ========================================================
-
-    while systemctl --user is-active --quiet "$NIRI_SERVICE"; do
-        sleep 0.2
-    done
-
-
-    # ========================================================
-    # Niri terminou
-    # ========================================================
-
-    {
-        echo
-        echo "========================================"
-        echo " NIRI TERMINOU"
-        echo "========================================"
-        echo "Data: $(date)"
-        echo
-
-        echo "========== RESULTADO =========="
-
-        systemctl --user show "$NIRI_SERVICE" \
-            -p ActiveState \
-            -p SubState \
-            -p Result \
-            -p ExecMainCode \
-            -p ExecMainStatus \
-            --no-pager || true
-
-        echo
-        echo "========== STATUS =========="
-
-        systemctl --user status \
-            "$NIRI_SERVICE" \
-            --no-pager || true
-
-    } >> "$log_file" 2>&1
-
+    # Starts the Wayland session on the integrated GPU.
+    niri-session -l
 
     return 0
 }

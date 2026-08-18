@@ -1,81 +1,26 @@
 #!/bin/bash
 # ============================================================
-# lib/common.sh
+# lib/common
 #
-# Funções e variáveis compartilhadas por todos os compositores.
-# Este arquivo é sempre carregado (source) pelo script principal
-# antes de qualquer módulo de compositor.
+# Shared functions and variables used by all compositors.
+# This file is always loaded (sourced) by the main script
+# before any compositor module.
 # ============================================================
 
-# Diretório onde os logs de cada sessão são gravados.
-LOG_DIR="$HOME/.local/state/steam-session"
-mkdir -p "$LOG_DIR"
-
-# Binário e argumentos do Steam, usados pelos compositores que
-# iniciam a Steam diretamente (KWin, SteamOS/Gamescope, etc).
+# Steam binary and arguments, used by compositors that
+# launch Steam directly (KWin, SteamOS/Gamescope, etc).
 STEAM_BIN="/usr/bin/steam"
 STEAM_ARGS=(-gamepadui)
 
 
 # ------------------------------------------------------------
-# timestamp
-# Retorna data/hora formatada para uso em mensagens e logs.
-# ------------------------------------------------------------
-timestamp() {
-    date '+%Y-%m-%d %H:%M:%S'
-}
-
-
-# ------------------------------------------------------------
-# new_log_file <nome>
-# Gera o caminho de um novo arquivo de log dentro de LOG_DIR,
-# já com o nome do compositor e um timestamp único.
-# ------------------------------------------------------------
-new_log_file() {
-    local name="$1"
-    echo "$LOG_DIR/${name}-$(date +%Y%m%d-%H%M%S).log"
-}
-
-
-# ------------------------------------------------------------
-# create_log_header <log_file> <título>
-# Escreve o cabeçalho padrão (sistema + ambiente) no início
-# de um arquivo de log.
-# ------------------------------------------------------------
-create_log_header() {
-    local log_file="$1"
-    local title="$2"
-
-    {
-        echo "========================================"
-        echo " $title"
-        echo "========================================"
-        echo "Data: $(date)"
-        echo
-
-        echo "========== SISTEMA =========="
-        uname -a
-        echo
-
-        echo "========== AMBIENTE =========="
-        env | grep -E \
-            '^(DISPLAY|WAYLAND|XDG_|GDK_|QT_|SDL_|NVIDIA_|__NV_|__VK_)' \
-            | sort || true
-
-        echo
-    } > "$log_file" 2>&1
-}
-
-
-# ------------------------------------------------------------
-# report_failure <título> <log_file> [status]
-# Exibe uma mensagem de erro padronizada na tela e pausa
-# a execução até o usuário pressionar ENTER.
+# report_failure <title> [status]
+# Displays a standardized error message on the screen and pauses
+# execution until the user presses ENTER.
 # ------------------------------------------------------------
 report_failure() {
     local title="$1"
-    local log_file="$2"
-    local status="${3:-}"
+    local status="${2:-}"
 
     clear
 
@@ -85,13 +30,9 @@ report_failure() {
     echo
 
     if [[ -n "$status" ]]; then
-        echo "Código de saída: $status"
+        echo "Exit code: $status"
         echo
     fi
 
-    echo "Log:"
-    echo "$log_file"
-    echo
-
-    read -rp "Pressione ENTER para voltar ao menu..."
+    read -rp "Press ENTER to return to the menu..."
 }

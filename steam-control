@@ -15,7 +15,7 @@ case "$1" in
                 wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle
                 ;;
             *)
-                echo "Uso: $0 volume {+N|-N|mute}"
+                echo "Usage: $0 volume {+N|-N|mute}"
                 exit 1
                 ;;
         esac
@@ -27,7 +27,7 @@ case "$1" in
                 wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle
                 ;;
             *)
-                echo "Uso: $0 mic {mute}"
+                echo "Usage: $0 mic {mute}"
                 exit 1
                 ;;
         esac
@@ -44,14 +44,14 @@ case "$1" in
                 brightnessctl set "${VALUE}%-"
                 ;;
             *)
-                echo "Uso: $0 brightness {+N|-N}"
+                echo "Usage: $0 brightness {+N|-N}"
                 exit 1
                 ;;
         esac
         ;;
 
     *)
-        echo "Uso:"
+        echo "Usage:"
         echo "  $0 volume {+N|-N|mute}"
         echo "  $0 mic mute"
         echo "  $0 brightness {+N|-N}"

@@ -4,46 +4,120 @@ set -u
 # ============================================================
 # STEAM GAMING SESSION
 #
-# Script principal: carrega os módulos de cada compositor
-# (lib/common + compositors/*) e controla o menu.
+# Main script: loads lib/common and, automatically,
+# all scripts found in compositors/. The menu is
+# dynamically built from what is found there
+# -- just add a new file to the compositors/ folder for
+# it to appear in the menu, without needing to edit this file.
 #
-# Estrutura esperada:
+# Expected structure:
 #   steam-session
-#   ├── steam-session          <- este arquivo
+#   ├── steam-session          <- this file
 #   ├── lib/
 #   │   └── common
 #   └── compositors/
 #       ├── niri
 #       ├── kwin
-#       ├── steamos         (gamescope)
-#       └── mutter          (futuro)
+#       ├── gamescope
+#       ├── mutter
+#       └── openbox
+#
+# CONVENTION for each file in compositors/:
+#
+#   - The file name is the "key" of the compositor (e.g., niri,
+#     kwin, gamescope, mutter, openbox). This is the name that can be
+#     used in DEFAULT_COMPOSITOR and as a command line argument.
+#
+#   - The file must define a start_<key> function (e.g.,
+#     start_niri). This is the function that will be called when
+#     selecting the item in the menu. It can be overridden by defining
+#     the COMPOSITOR_FUNC variable before the end of the file.
+#
+#   - Optionally, the file can define COMPOSITOR_LABEL with
+#     the text displayed in the menu (e.g., COMPOSITOR_LABEL="gamescope
+#     (Gamescope)"). If not defined, the file name is used with the
+#     first letter capitalized.
+#
+# Minimal example of compositors/hyprland:
+#
+#   COMPOSITOR_LABEL="Hyprland"
+#   start_hyprland() {
+#       exec Hyprland
+#   }
+#
 # ============================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+COMPOSITORS_DIR="$SCRIPT_DIR/compositors"
 
 source "$SCRIPT_DIR/lib/common"
-source "$SCRIPT_DIR/compositors/niri"
-source "$SCRIPT_DIR/compositors/kwin"
-source "$SCRIPT_DIR/compositors/steamos"
-source "$SCRIPT_DIR/compositors/mutter"
-source "$SCRIPT_DIR/compositors/openbox"
 
 
 # ============================================================
-# CONFIGURAÇÃO (compositor padrão / pular menu)
+# AUTOMATIC COMPOSITOR DISCOVERY
+#
+# Scans compositors/ and builds, in the order the files are
+# found (alphabetical order), parallel lists:
+#   COMPOSITOR_KEYS[i]   -> file name / key
+#   COMPOSITOR_LABELS[i] -> text displayed in the menu
+#   COMPOSITOR_FUNCS[i]  -> function to be called
+# ============================================================
+
+COMPOSITOR_KEYS=()
+COMPOSITOR_LABELS=()
+COMPOSITOR_FUNCS=()
+
+if [[ -d "$COMPOSITORS_DIR" ]]; then
+
+    for file in "$COMPOSITORS_DIR"/*; do
+
+        [[ -f "$file" ]] || continue
+
+        key="$(basename "$file")"
+
+        # Ignore hidden files, backups, and the like.
+        [[ "$key" == .* || "$key" == *~ || "$key" == *.bak ]] && continue
+
+        # Variables that the file can (optionally) define.
+        COMPOSITOR_LABEL=""
+        COMPOSITOR_FUNC=""
+
+        source "$file"
+
+        label="${COMPOSITOR_LABEL:-${key^}}"
+        func="${COMPOSITOR_FUNC:-start_$key}"
+
+        if ! declare -F "$func" > /dev/null; then
+            echo "Warning: '$file' does not define function '$func'; ignoring." >&2
+            continue
+        fi
+
+        COMPOSITOR_KEYS+=("$key")
+        COMPOSITOR_LABELS+=("$label")
+        COMPOSITOR_FUNCS+=("$func")
+
+    done
+
+fi
+
+COMPOSITOR_COUNT=${#COMPOSITOR_KEYS[@]}
+
+
+# ============================================================
+# CONFIGURATION (default compositor / skip menu)
 # ============================================================
 #
-# Arquivo: ~/.config/steam-session/config
+# File: ~/.config/steam-session/config
 #
-# Variáveis aceitas:
-#   DEFAULT_COMPOSITOR = niri | kwin | steamos | mutter | shell
+# Accepted variables:
+#   DEFAULT_COMPOSITOR = <key from compositors/> | shell
 #   SKIP_MENU          = true | false
 #
-# Se SKIP_MENU="true", o menu nunca é exibido: o script sempre
-# inicia DEFAULT_COMPOSITOR diretamente, inclusive depois que a
-# sessão terminar (volta a iniciar automaticamente em loop).
+# If SKIP_MENU="true", the menu is never shown: the script always
+# launches DEFAULT_COMPOSITOR directly, even after the session
+# ends (it loops back and auto-starts again).
 #
-# Veja config.example neste mesmo diretório.
+# See config.example in this same directory.
 
 DEFAULT_COMPOSITOR="niri"
 SKIP_MENU="false"
@@ -92,7 +166,7 @@ start_shell() {
 reboot_system() {
 
     clear
-    echo "Reiniciando..."
+    echo "Restarting..."
 
     sleep 1
 
@@ -107,7 +181,7 @@ reboot_system() {
 shutdown_system() {
 
     clear
-    echo "Desligando..."
+    echo "Shutting down..."
 
     sleep 1
 
@@ -117,6 +191,9 @@ shutdown_system() {
 
 # ============================================================
 # MENU
+#
+# The compositors (1..N) come from the automatic discovery above.
+# Shell / Reboot / Shutdown are always the last 3 items.
 # ============================================================
 
 show_menu() {
@@ -127,98 +204,106 @@ show_menu() {
     echo "        STEAM GAMING SESSION"
     echo "=================================="
     echo
-    echo "  1) Niri"
-    echo "  2) Openbox (X11)"
-    echo "  3) KWin Wayland"
-    echo "  4) SteamOS (Gamescope)"
-    echo "  5) Mutter"
-    echo "  6) Shell"
-    echo "  7) Reboot"
-    echo "  8) Shutdown"
+
+    local i
+    for ((i = 0; i < COMPOSITOR_COUNT; i++)); do
+        printf "  %d) %s\n" "$((i + 1))" "${COMPOSITOR_LABELS[$i]}"
+    done
+
+    echo "  $((COMPOSITOR_COUNT + 1))) Shell"
+    echo "  $((COMPOSITOR_COUNT + 2))) Reboot"
+    echo "  $((COMPOSITOR_COUNT + 3))) Shutdown"
     echo
-    echo "Padrão atual: $DEFAULT_COMPOSITOR  (SKIP_MENU=$SKIP_MENU)"
+    echo "Current default: $DEFAULT_COMPOSITOR  (SKIP_MENU=$SKIP_MENU)"
     echo
 }
 
 
 # ============================================================
-# DESPACHO
+# DISPATCH
 #
-# Aceita tanto o número do menu quanto o nome do compositor
-# (usado pelo DEFAULT_COMPOSITOR do arquivo de configuração).
-# Retorna 0 para "continuar o loop" e 9 para "opção inválida".
+# Accepts both the menu number or the compositor key
+# (file name in compositors/), used by
+# DEFAULT_COMPOSITOR in the configuration file or via command
+# line argument.
+# Returns 0 to "continue loop" and 9 for "invalid option".
 # ============================================================
 
 dispatch_compositor() {
 
     local choice="$1"
+    local i
 
+    # Numeric item from discovered compositors.
+    if [[ "$choice" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice <= COMPOSITOR_COUNT )); then
+        "${COMPOSITOR_FUNCS[$((choice - 1))]}"
+        return 0
+    fi
+
+    # Fixed numeric items: Shell / Reboot / Shutdown.
+    if [[ "$choice" == "$((COMPOSITOR_COUNT + 1))" ]]; then
+        start_shell
+        return 0
+    fi
+
+    if [[ "$choice" == "$((COMPOSITOR_COUNT + 2))" ]]; then
+        reboot_system
+        exit
+    fi
+
+    if [[ "$choice" == "$((COMPOSITOR_COUNT + 3))" ]]; then
+        shutdown_system
+        exit
+    fi
+
+    # Fixed keywords.
     case "$choice" in
-
-        1|niri)
-            start_niri
-            ;;
-
-        2|openbox|x11)
-            start_openbox
-            ;;
-
-        3|kwin|kde)
-            start_kwin
-            ;;
-
-        4|steamos|gamescope)
-            start_steamos
-            ;;
-
-        5|mutter)
-            start_mutter
-            ;;
-
-        6|shell)
+        shell)
             start_shell
+            return 0
             ;;
-
-        7|reboot)
+        reboot)
             reboot_system
             exit
             ;;
-
-        8|shutdown)
+        shutdown)
             shutdown_system
             exit
             ;;
-
-        *)
-            return 9
-            ;;
-
     esac
 
-    return 0
+    # Key of a discovered compositor in compositors/.
+    for ((i = 0; i < COMPOSITOR_COUNT; i++)); do
+        if [[ "$choice" == "${COMPOSITOR_KEYS[$i]}" ]]; then
+            "${COMPOSITOR_FUNCS[$i]}"
+            return 0
+        fi
+    done
+
+    return 9
 }
 
 
 # ============================================================
-# ARGUMENTO
+# ARGUMENT
 # ============================================================
 
-# Um argumento na linha de comando sempre tem prioridade e é
-# usado apenas uma vez (nome ou número). Depois disso, o
-# comportamento depende de SKIP_MENU:
+# A command line argument always has priority and is
+# used only once (compositor key or number). After
+# that, the behavior depends on SKIP_MENU:
 #
-#   SKIP_MENU=false -> volta a mostrar o menu normalmente.
-#   SKIP_MENU=true  -> volta a iniciar DEFAULT_COMPOSITOR direto.
+#   SKIP_MENU=false -> returns to showing the menu normally.
+#   SKIP_MENU=true  -> returns to launching DEFAULT_COMPOSITOR directly.
 #
-# Passe "menu" como argumento para forçar a exibição do menu
-# mesmo com SKIP_MENU=true no arquivo de configuração.
+# Pass "menu" as an argument to force showing the menu
+# even with SKIP_MENU=true in the configuration file.
 #
-# Exemplos:
-#   steam-session           -> usa DEFAULT_COMPOSITOR/SKIP_MENU do config
-#   steam-session niri      -> Niri (uma vez)
-#   steam-session kwin      -> KWin (uma vez)
-#   steam-session steamos   -> SteamOS/Gamescope (uma vez)
-#   steam-session menu      -> força exibir o menu
+# Examples:
+#   steam-session           -> uses DEFAULT_COMPOSITOR/SKIP_MENU from config
+#   steam-session niri      -> Niri
+#   steam-session kwin      -> KWin
+#   steam-session gamescope -> gamescope
+#   steam-session menu      -> forces showing the menu
 
 ARG="${1:-}"
 FORCE_MENU="false"
@@ -232,23 +317,23 @@ ONCE="$ARG"
 
 
 # ============================================================
-# LOOP PRINCIPAL
+# MAIN LOOP
 # ============================================================
 
 while true; do
 
     if [[ -n "$ONCE" ]]; then
-        # Argumento de linha de comando: usado uma única vez.
+        # Command line argument: used only once.
         choice="$ONCE"
         ONCE=""
 
     elif [[ "$SKIP_MENU" == "true" && "$FORCE_MENU" == "false" ]]; then
-        # Sem menu: sempre reinicia o compositor padrão.
+        # No menu: always restart the default compositor.
         choice="$DEFAULT_COMPOSITOR"
 
     else
         show_menu
-        read -rp "Selecione [1-8]: " choice
+        read -rp "Select [1-$((COMPOSITOR_COUNT + 3))]: " choice
     fi
 
 
@@ -257,10 +342,10 @@ while true; do
         clear
 
         echo "=================================="
-        echo "        OPÇÃO INVÁLIDA"
+        echo "         INVALID OPTION"
         echo "=================================="
         echo
-        echo "Opção selecionada: $choice"
+        echo "Selected option: $choice"
         echo
 
         sleep 2
